@@ -472,6 +472,7 @@ async def process_language_selection(callback_query: types.CallbackQuery, state:
         logging.error(f"Til yangilashda xatolik: user_id={user_id}, error={e}")
         await callback_query.answer(await get_message_async("uz", "error_occurred"), show_alert=True)
 
+
 @dp.message_handler(content_types=types.ContentTypes.PHOTO, state=UserStates.WAITING_FOR_PAYMENT)
 async def handle_payment_photo(message: types.Message, state: FSMContext):
     """Payment photo handler"""
@@ -489,7 +490,7 @@ async def handle_payment_photo(message: types.Message, state: FSMContext):
             )
             return
 
-        # Real vaqtda to‘lov ma'lumotlarini olish
+        # Real vaqtda to'lov ma'lumotlarini olish
         payment_info = await payment_cache.get_payment_info()
 
         payment_id = await payment_db.add_payment(
@@ -504,16 +505,32 @@ async def handle_payment_photo(message: types.Message, state: FSMContext):
             protect_content=True
         )
 
+        # Maxsus belgilarni ekranlash funksiyasi
+        def escape_markdown_v2(text):
+            """MarkdownV2 uchun maxsus belgilarni ekranlash"""
+            special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+            for char in special_chars:
+                text = text.replace(char, f'\\{char}')
+            return text
+
+        # Ma'lumotlarni xavfsiz formatga o'tkazish
         username = message.from_user.username or message.from_user.full_name
+        safe_username = escape_markdown_v2(username)
+        safe_user_id = escape_markdown_v2(str(user_id))
+        safe_amount = escape_markdown_v2(str(payment_info['amount']))
+
+        # Vaqtni formatlash
         current_time = message.date.strftime("%Y-%m-%d %H:%M:%S")
+        safe_time = escape_markdown_v2(current_time)
+
         admin_message = (
-            f"🆕 *Yangi to‘lov cheki!*\n\n"
-            f"👤 *Foydalanuvchi ID:* `{user_id}`\n"
-            f"👤 *Username:* @{username if username else 'Noma‘lum'}\n"
-            f"💰 *To‘lov summasi:* ${payment_info['amount']}\n"
-            f"📅 *Vaqt:* {current_time}\n\n"
-            f"✅ *Tasdiqlash:* `/allow {user_id}`\n"
-            f"❌ *Rad qilish:* `/disallow {user_id}`"
+            f"🆕 *Yangi to'lov cheki\\!*\n\n"
+            f"👤 *Foydalanuvchi ID:* `{safe_user_id}`\n"
+            f"👤 *Username:* @{safe_username}\n"
+            f"💰 *To'lov summasi:* ${safe_amount}\n"
+            f"📅 *Vaqt:* {safe_time}\n\n"
+            f"✅ *Tasdiqlash:* `/allow {safe_user_id}`\n"
+            f"❌ *Rad qilish:* `/disallow {safe_user_id}`"
         )
 
         payment_keyboard = InlineKeyboardMarkup(row_width=2).add(
@@ -528,25 +545,34 @@ async def handle_payment_photo(message: types.Message, state: FSMContext):
                     photo=photo_file_id,
                     caption=admin_message,
                     reply_markup=payment_keyboard,
-                    parse_mode="Markdown"
+                    parse_mode="MarkdownV2"
                 )
             except Exception as admin_error:
                 logging.error(f"Admin {admin_id} ga xabar yuborishda xatolik: {admin_error}")
+                # Zaxira xabar, Markdownsiz
                 try:
                     await bot.send_photo(
                         chat_id=admin_id,
                         photo=photo_file_id,
-                        caption=admin_message.replace("*", "").replace("`", ""),
+                        caption=(
+                            f"Yangi to'lov cheki!\n\n"
+                            f"Foydalanuvchi ID: {user_id}\n"
+                            f"Username: @{username}\n"
+                            f"To'lov summasi: ${payment_info['amount']}\n"
+                            f"Vaqt: {current_time}\n\n"
+                            f"Tasdiqlash: /allow {user_id}\n"
+                            f"Rad qilish: /disallow {user_id}"
+                        ),
                         reply_markup=payment_keyboard
                     )
                 except Exception as fallback_error:
-                    logging.error(f"Admin {admin_id} ga zaxira xabar yuborishda xatolik: {fallback_error}")
+                    logging.error(f"Zaxira xabar ham yuborilmadi: {fallback_error}")
 
         await state.finish()
-        logging.info(f"To‘lov yuborildi: user_id={user_id}, payment_id={payment_id}, amount=${payment_info['amount']}")
+        logging.info(f"To'lov yuborildi: user_id={user_id}, payment_id={payment_id}, amount=${payment_info['amount']}")
 
     except Exception as e:
-        logging.error(f"To‘lovni qayta ishlashda xatolik: user_id={user_id}, error={e}")
+        logging.error(f"To'lovni qayta ishlashda xatolik: user_id={user_id}, error={e}")
         await message.answer(
             await get_message_async(user_language, "error_occurred"),
             parse_mode="Markdown",

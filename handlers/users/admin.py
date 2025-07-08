@@ -868,78 +868,95 @@ async def delete_confirm(callback_query: types.CallbackQuery, state: FSMContext)
 
 
 # Handle Payment Actions
+# admin.py, handle_payment_action funksiyasi
 @dp.callback_query_handler(lambda c: c.data.startswith(("allow_", "disallow_")))
 async def handle_payment_action(callback_query: types.CallbackQuery):
+    """Handle payment actions"""
     user_id = callback_query.from_user.id
     action, telegram_id = callback_query.data.split("_")
     telegram_id = int(telegram_id)
-
     try:
         user_language = await user_db.get_user_language(telegram_id=user_id) or "uz"
         user = await user_db.select_user(telegram_id=telegram_id)
-
         payment = None
         for p in await payment_db.get_pending_payments():
             if p["telegram_id"] == telegram_id:
                 payment = p
                 break
-
         if not payment:
-            await callback_query.answer("To'lov topilmadi yoki allaqachon ko‘rib chiqilgan.", show_alert=True)
+            await callback_query.answer("To'lov topilmadi yoki allaqachon ko'rib chiqilgan.", show_alert=True)
             return
+
+        # Maxsus belgilarni ekranlash funksiyasi
+        def escape_markdown_v2(text):
+            """MarkdownV2 uchun maxsus belgilarni ekranlash"""
+            special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+            for char in special_chars:
+                text = text.replace(char, f'\\{char}')
+            return text
+
+        # Ma'lumotlarni xavfsiz formatga o'tkazish
+        username = user.get("username", "Noma'lum") or "Noma'lum"
+        safe_username = escape_markdown_v2(username)
+
+        # Vaqtni formatlash
+        created_at = payment.get("created_at", "")
+        if hasattr(created_at, 'strftime'):
+            formatted_time = created_at.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            formatted_time = str(created_at)
+        safe_time = escape_markdown_v2(formatted_time)
+
+        # Summani xavfsiz formatga o'tkazish
+        safe_amount = escape_markdown_v2(str(payment['amount']))
+        safe_telegram_id = escape_markdown_v2(str(telegram_id))
 
         if action == "allow":
             await user_db.update_user_permission(telegram_id=telegram_id, is_allowed=True)
             await payment_db.update_payment_status(payment_id=payment["id"], status="approved")
-
             await bot.send_message(
                 telegram_id,
                 get_message(user.get("language", "uz"), "user_allowed"),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                protect_content=True
             )
-
             await callback_query.message.edit_caption(
                 caption=(
                     f"💰 *To'lov Cheki*\n\n"
-                    f"👤 ID: `{telegram_id}`\n"
-                    f"👤 Username: @{user.get('username', 'Nomaʼlum')}\n"
-                    f"💰 Summa: ${payment['amount']}\n"
-                    f"📅 Vaqt: {payment['created_at']}\n"
-                    f"✅ *Ruxsat berildi!*"
+                    f"👤 ID: `{safe_telegram_id}`\n"
+                    f"👤 Username: @{safe_username}\n"
+                    f"💰 Summa: ${safe_amount}\n"
+                    f"📅 Vaqt: {safe_time}\n"
+                    f"✅ *Ruxsat berildi\\!*"
                 ),
-                parse_mode="Markdown"
+                parse_mode="MarkdownV2"
             )
             logging.info(f"✅ Ruxsat berildi: admin_id={user_id}, telegram_id={telegram_id}")
-
         elif action == "disallow":
             await user_db.update_user_permission(telegram_id=telegram_id, is_allowed=False)
             await payment_db.update_payment_status(payment_id=payment["id"], status="rejected")
-
             await bot.send_message(
                 telegram_id,
                 get_message(user.get("language", "uz"), "user_disallowed"),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                protect_content=True
             )
-
             await callback_query.message.edit_caption(
                 caption=(
                     f"💰 *To'lov Cheki*\n\n"
-                    f"👤 ID: `{telegram_id}`\n"
-                    f"👤 Username: @{user.get('username', 'Nomaʼlum')}\n"
-                    f"💰 Summa: ${payment['amount']}\n"
-                    f"📅 Vaqt: {payment['created_at']}\n"
-                    f"❌ *Ruxsat bekor qilindi!*"
+                    f"👤 ID: `{safe_telegram_id}`\n"
+                    f"👤 Username: @{safe_username}\n"
+                    f"💰 Summa: ${safe_amount}\n"
+                    f"📅 Vaqt: {safe_time}\n"
+                    f"❌ *Ruxsat bekor qilindi\\!*"
                 ),
-                parse_mode="Markdown"
+                parse_mode="MarkdownV2"
             )
             logging.info(f"❌ Ruxsat bekor qilindi: admin_id={user_id}, telegram_id={telegram_id}")
-
         await callback_query.answer()
-
     except Exception as e:
         logging.error(f"❌ To'lov harakatida xatolik: {e}")
         await callback_query.answer(get_message(user_language, "error_occurred"), show_alert=True)
-
 
 @dp.message_handler(commands=['canceled'], state="*")
 async def cancel_command(message: types.Message, state: FSMContext):
