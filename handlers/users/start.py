@@ -1032,3 +1032,35 @@ async def handle_unexpected_message(message: types.Message, state: FSMContext):
             parse_mode="Markdown",
             protect_content=True
         )
+
+
+@dp.message_handler(commands=['cancel'], state="*")
+async def cancel_command(message: types.Message, state: FSMContext):
+    """Cancel command to reset state and return to main menu"""
+    user_id = message.from_user.id
+    try:
+        user = await user_db.select_user(telegram_id=user_id)
+        user_language = user.get("language", "uz") if user else "uz"
+
+        # Reset the current state
+        await state.finish()
+
+        # Update last active timestamp
+        await user_db.update_last_active(telegram_id=user_id)
+
+        # Send main menu
+        await message.answer(
+            await get_message_async(user_language, "select_section"),
+            reply_markup=await get_main_menu(user_language),
+            parse_mode="Markdown",
+            protect_content=True
+        )
+        logging.info(f"Cancel command executed: user_id={user_id}, language={user_language}")
+
+    except Exception as e:
+        logging.error(f"Error in cancel command: user_id={user_id}, error={e}")
+        await message.answer(
+            await get_message_async("uz", "error_occurred"),
+            parse_mode="Markdown",
+            protect_content=True
+        )
