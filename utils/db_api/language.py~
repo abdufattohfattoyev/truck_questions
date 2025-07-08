@@ -1,0 +1,38 @@
+from .database import Database
+
+
+class LanguageDatabase(Database):
+    def __init__(self, path_to_db: str):
+        super().__init__(path_to_db)
+
+    def add_language_column(self):
+        """Userlar jadvaliga language ustunini qo'shish."""
+        sql = """
+        ALTER TABLE Users 
+        ADD COLUMN language VARCHAR(10) DEFAULT 'uz'
+        """
+        try:
+            self.execute(sql, commit=True)
+        except Exception as e:
+            # SQLite uchun "duplicate column name" xatosini tekshirish
+            if "duplicate column name" not in str(e).lower():
+                raise e
+
+    def update_user_language(self, telegram_id: int, language: str):
+        """Foydalanuvchi tilini yangilash."""
+        sql = """
+        UPDATE Users 
+        SET language = ? 
+        WHERE telegram_id = ?
+        """
+        self.execute(sql, parameters=(language, telegram_id), commit=True)
+
+    def get_user_language(self, telegram_id: int) -> str:
+        """Foydalanuvchi tilini olish."""
+        sql = """
+        SELECT language 
+        FROM Users 
+        WHERE telegram_id = ?
+        """
+        result = self.execute(sql, parameters=(telegram_id,), fetchone=True)
+        return result[0] if result else 'uz'

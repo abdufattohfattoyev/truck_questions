@@ -1,0 +1,122 @@
+import sqlite3
+import logging
+from datetime import datetime
+import pytz
+from typing import List, Dict, Any, Optional
+
+class PaymentDatabase:
+    def __init__(self, path_to_db: str):
+        self.path_to_db = path_to_db
+        self.uzbekistan_tz = pytz.timezone("Asia/Tashkent")
+        logging.info(f"PaymentDatabase initialized with path: {path_to_db}")
+
+    def execute(self, sql: str, parameters: tuple = (), fetchone: bool = False, fetchall: bool = False, commit: bool = False) -> Any:
+        """Execute a SQL query with the given parameters."""
+        try:
+            with sqlite3.connect(self.path_to_db) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(sql, parameters)
+                if commit:
+                    conn.commit()
+                if fetchone:
+                    result = cursor.fetchone()
+                    return dict(result) if result else None
+                if fetchall:
+                    result = cursor.fetchall()
+                    return [dict(row) for row in result] if result else []
+                return None
+        except sqlite3.Error as e:
+            logging.error(f"SQL error in execute: {e}, query: {sql}")
+            raise
+        except Exception as e:
+            logging.error(f"Unexpected error in execute: {e}, query: {sql}")
+            raise
+
+    def _get_current_time(self) -> datetime:
+        """Joriy vaqtni O‘zbekiston vaqt mintaqasida oladi."""
+        return datetime.now(self.uzbekistan_tz)
+
+    async def create_table_payments(self) -> None:
+        """To‘lovlar jadvalini yaratadi."""
+        sql = """
+            CREATE TABLE IF NOT EXISTS Payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id BIGINT NOT NULL,
+                photo_file_id VARCHAR(255) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME,
+                FOREIGN KEY (telegram_id) REFERENCES Users(telegram_id)
+            );
+        """
+        self.execute(sql, commit=True)
+        logging.info("Payments table created or already exists.")
+
+    async def add_payment(self, telegram_id: int, photo_file_id: str, amount: float) -> int:
+        """To‘lov chekini qo‘shadi va payment ID ni qaytaradi."""
+        if not photo_file_id:
+            raise ValueError("Photo file ID cannot be empty")
+        if amount <= 0:
+            raise ValueError("Amount must be greater than zero")
+        try:
+            created_at = self._get_current_time().isoformat()
+            # Faqat bitta pending to'lov bo'lishi mumkin
+            if await self.get_user_pending_payment(telegram_id):
+                raise ValueError(f"User {telegram_id} already has a pending payment")
+            sql = """
+                INSERT INTO Payments (telegram_id, photo_file_id, amount, status, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """
+            self.execute(sql, parameters=(telegram_id, photo_file_id, amount, 'pending', created_at), commit=True)
+            result = self.execute("SELECT last_insert_rowid()", fetchone=True)
+            payment_id = result['last_insert_rowid()'] if result else None
+            logging.info(f"Payment added: telegram_id={telegram_id}, payment_id={payment_id}, amount={amount}")
+            return payment_id
+        except Exception as e:
+            logging.error(f"Error adding payment: telegram_id={telegram_id}, error={e}")
+            raise
+
+    async def get_user_pending_payment(self, telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Foydalanuvchining tasdiqlanmagan to'lovini qaytaradi."""
+        try:
+            sql = "SELECT * FROM Payments WHERE telegram_id = ? AND status = 'pending'"
+            result = self.execute(sql, parameters=(telegram_id,), fetchone=True)
+            return result
+        except Exception as e:
+            logging.error(f"Error getting pending payment: telegram_id={telegram_id}, error={e}")
+            return None
+
+    async def get_pending_payments(self) -> List[Dict[str, Any]]:
+        """Barcha tasdiqlanmagan to‘lovlarni qaytaradi."""
+        try:
+            sql = "SELECT * FROM Payments WHERE status = 'pending' ORDER BY created_at DESC"
+            result = self.execute(sql, fetchall=True)
+            return result
+        except Exception as e:
+            logging.error(f"Error getting pending payments: error={e}")
+            return []
+
+    async def update_payment_status(self, payment_id: int, status: str) -> None:
+        """To‘lov holatini yangilaydi."""
+        if status not in ['pending', 'approved', 'rejected']:
+            raise ValueError(f"Invalid payment status: {status}")
+        try:
+            updated_at = self._get_current_time().isoformat()
+            sql = "UPDATE Payments SET status = ?, updated_at = ? WHERE id = ?"
+            self.execute(sql, parameters=(status, updated_at, payment_id), commit=True)
+            logging.info(f"Payment status updated: payment_id={payment_id}, status={status}")
+        except Exception as e:
+            logging.error(f"Error updating payment status: payment_id={payment_id}, error={e}")
+            raise
+
+    async def get_user_payment_history(self, telegram_id: int) -> List[Dict[str, Any]]:
+        """Foydalanuvchining to‘lovlar tarixini qaytaradi."""
+        try:
+            sql = "SELECT * FROM Payments WHERE telegram_id = ? ORDER BY created_at DESC"
+            result = self.execute(sql, parameters=(telegram_id,), fetchall=True)
+            return result
+        except Exception as e:
+            logging.error(f"Error getting payment history: telegram_id={telegram_id}, error={e}")
+            return []
