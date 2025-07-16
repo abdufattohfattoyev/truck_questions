@@ -393,28 +393,43 @@ class SectionsDatabase:
         result = self.execute(sql, parameters=(language,), fetchall=True)
         return result or []
 
-    async def get_question_by_id(self, question_id: int, language: str = 'uz') -> Optional[Dict[str, Any]]:
-        """Savolni ID va til bo'yicha qaytaradi."""
-        if language not in ['uz', 'ru', 'es']:
+    async def get_question_by_id(self, question_id: int, language: str = None) -> Optional[Dict[str, Any]]:
+        """Savolni ID bo'yicha qaytaradi, til ixtiyoriy."""
+        if language and language not in ['uz', 'ru', 'es']:
             raise ValueError(f"Invalid language code: {language}")
-        sql = "SELECT id, display_id, question, answer, audio_file_id, language FROM Questions WHERE id = ? AND language = ?"
-        result = self.execute(sql, parameters=(question_id, language), fetchone=True)
+        if language:
+            sql = "SELECT id, display_id, question, answer, audio_file_id, language FROM Questions WHERE id = ? AND language = ?"
+            result = self.execute(sql, parameters=(question_id, language), fetchone=True)
+        else:
+            sql = "SELECT id, display_id, question, answer, audio_file_id, language FROM Questions WHERE id = ?"
+            result = self.execute(sql, parameters=(question_id,), fetchone=True)
+        logging.info(f"Question qidirildi: question_id={question_id}, language={language}, found={bool(result)}")
         return result
 
-    async def get_road_sign_by_id(self, sign_id: int, language: str = 'uz') -> Optional[Dict[str, Any]]:
-        """Yo'l belgisini ID va til bo'yicha qaytaradi."""
-        if language not in ['uz', 'ru', 'es']:
+    async def get_road_sign_by_id(self, sign_id: int, language: str = None) -> Optional[Dict[str, Any]]:
+        """Yo'l belgisini ID bo'yicha qaytaradi, til ixtiyoriy."""
+        if language and language not in ['uz', 'ru', 'es']:
             raise ValueError(f"Invalid language code: {language}")
-        sql = "SELECT id, display_id, image_file_id, description, language FROM RoadSigns WHERE id = ? AND language = ?"
-        result = self.execute(sql, parameters=(sign_id, language), fetchone=True)
+        if language:
+            sql = "SELECT id, display_id, image_file_id, description, language FROM RoadSigns WHERE id = ? AND language = ?"
+            result = self.execute(sql, parameters=(sign_id, language), fetchone=True)
+        else:
+            sql = "SELECT id, display_id, image_file_id, description, language FROM RoadSigns WHERE id = ?"
+            result = self.execute(sql, parameters=(sign_id,), fetchone=True)
+        logging.info(f"Road sign qidirildi: sign_id={sign_id}, language={language}, found={bool(result)}")
         return result
 
-    async def get_truck_part_by_id(self, part_id: int, language: str = 'uz') -> Optional[Dict[str, Any]]:
-        """Yuk mashinasi qismini ID va til bo'yicha qaytaradi."""
-        if language not in ['uz', 'ru', 'es']:
+    async def get_truck_part_by_id(self, part_id: int, language: str = None) -> Optional[Dict[str, Any]]:
+        """Yuk mashinasi qismini ID bo'yicha qaytaradi, til ixtiyoriy."""
+        if language and language not in ['uz', 'ru', 'es']:
             raise ValueError(f"Invalid language code: {language}")
-        sql = "SELECT id, display_id, image_file_id, description, language FROM TruckParts WHERE id = ? AND language = ?"
-        result = self.execute(sql, parameters=(part_id, language), fetchone=True)
+        if language:
+            sql = "SELECT id, display_id, image_file_id, description, language FROM TruckParts WHERE id = ? AND language = ?"
+            result = self.execute(sql, parameters=(part_id, language), fetchone=True)
+        else:
+            sql = "SELECT id, display_id, image_file_id, description, language FROM TruckParts WHERE id = ?"
+            result = self.execute(sql, parameters=(part_id,), fetchone=True)
+        logging.info(f"Truck part qidirildi: part_id={part_id}, language={language}, found={bool(result)}")
         return result
 
     async def delete_question(self, question_id: int) -> None:

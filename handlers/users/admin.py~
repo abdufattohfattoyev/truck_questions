@@ -952,35 +952,18 @@ async def delete_confirm(callback_query: types.CallbackQuery, state: FSMContext)
         return
 
     try:
-        # Parse callback data properly
-        # confirm_delete_road_sign_2 -> road_sign, 2
-        callback_data = callback_query.data.replace("confirm_delete_", "")
+        _, _, section, item_id = callback_query.data.split("_")
+        item_id = int(item_id)
 
-        # Find the last underscore to separate section and item_id
-        last_underscore_index = callback_data.rfind("_")
-        if last_underscore_index == -1:
-            raise ValueError("Invalid callback format")
-
-        section = callback_data[:last_underscore_index]  # road_sign
-        item_id_str = callback_data[last_underscore_index + 1:]  # 2
-
-        try:
-            item_id = int(item_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid item ID: {item_id_str}")
-
-        # Delete the item based on section
         if section == "question":
             await sections_db.delete_question(item_id)
             success_msg = "✅ *Savol o'chirildi!*"
         elif section == "road_sign":
             await sections_db.delete_road_sign(item_id)
             success_msg = "✅ *Yo'l belgisi o'chirildi!*"
-        elif section == "truck_part":
+        else:
             await sections_db.delete_truck_part(item_id)
             success_msg = "✅ *Truck zapchasti o'chirildi!*"
-        else:
-            raise ValueError(f"Unknown section: {section}")
 
         await callback_query.message.delete()
         await callback_query.message.answer(
@@ -990,14 +973,9 @@ async def delete_confirm(callback_query: types.CallbackQuery, state: FSMContext)
         )
         await state.finish()
         logging.info(f"Element o'chirildi: user_id={user_id}, section={section}, item_id={item_id}")
-
     except Exception as e:
         logging.error(f"Element o'chirishda xatolik: {e}")
-        await callback_query.message.answer(
-            get_message(user_language, "error_occurred") + f"\n❌ *Xatolik: {str(e)}*",
-            reply_markup=get_admin_menu(),
-            parse_mode="Markdown"
-        )
+        await callback_query.message.answer(get_message(user_language, "error_occurred"), parse_mode="Markdown")
         await state.finish()
 
 

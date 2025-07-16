@@ -807,7 +807,7 @@ async def send_item_content(message: types.Message, item: dict, section: str, la
             full_text = f"🚦 {road_sign_label}: {sign_name}"
 
             if sign_description and sign_description.strip():
-                full_text += f"\n\n📝 Info:\n{sign_description}"
+                full_text += f"\n\n📝 Tavsif:\n{sign_description}"
 
             logging.info(f"Road sign full text: {full_text}")
 
@@ -834,7 +834,7 @@ async def send_item_content(message: types.Message, item: dict, section: str, la
             full_text = f"🚚 {truck_part_label}: {part_name}"
 
             if part_description and part_description.strip():
-                full_text += f"\n\n📝 Info:\n{part_description}"
+                full_text += f"\n\n📝 Tavsif:\n{part_description}"
 
             logging.info(f"Truck part full text: {full_text}")
 
